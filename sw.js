@@ -2,6 +2,7 @@ const CACHE_NAME = 'aventura-fantastica-cache-v1';
 const urlsToCache = [
   '/',
   '/index.html',
+  '/manifest.json',
   '/index.tsx',
   '/metadata.json',
   '/App.tsx',
@@ -27,6 +28,7 @@ const urlsToCache = [
   '/game/storage.ts',
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;700&display=swap',
+  'https://picsum.photos/seed/fantasyworld/1200/800',
 ];
 
 self.addEventListener('install', (event) => {
