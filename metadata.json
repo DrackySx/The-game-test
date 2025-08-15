@@ -1,0 +1,5 @@
+{
+  "name": "Aventura Fantástica",
+  "description": "An RPG helper and demo application to create characters, view game content, and simulate combat in a fantasy world.",
+  "requestFramePermissions": []
+}

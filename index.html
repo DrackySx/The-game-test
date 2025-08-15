@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aventura Fantástica</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1f2937" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;700&display=swap');
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+        .font-title {
+            font-family: 'MedievalSharp', cursive;
+        }
+        @keyframes rotate-hue {
+            to {
+                filter: hue-rotate(1turn);
+            }
+        }
+        .rainbow-neon-box {
+            position: relative;
+            z-index: 1;
+            margin-top: 2rem;
+        }
+        .rainbow-neon-box::before {
+            content: "";
+            position: absolute;
+            inset: -5px;
+            z-index: -1;
+            background: conic-gradient(
+                from 180deg at 50% 50%,
+                #ff2a2a, #ff7f2a, #ffff2a, #2aff2a, #2a7fff, #a22aff, #ff2afc, #ff2a2a
+            );
+            border-radius: 1.25rem;
+            filter: blur(15px);
+            animation: rotate-hue 6s linear infinite;
+        }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
