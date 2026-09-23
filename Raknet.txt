@@ -1,4 +1,4 @@
--- Script de autofarm para Pet Simulator X com UI Rayfield Gen2
+-- Script de autofarm para Pet Simulator X (versão final corrigida)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -173,108 +173,210 @@ local function ActivateMagnet()
     end
 end
 
--- Carrega a UI Rayfield Gen2
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+-- Criação da UI Simples (sem Rayfield)
+local function createSimpleUI()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "PSX_AutoFarm_UI"
+    ScreenGui.Parent = PlayerGui
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
 
-local Window = Rayfield:CreateWindow({
-    Name = "PSX Auto-Farm | by Sirius",
-    LoadingTitle = "Carregando Auto-Farm",
-    LoadingSubtitle = "por Sirius",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "SiriusPSX",
-        FileName = "AutoFarmConfig"
-    },
-    KeySystem = false
-})
+    -- Frame principal
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 250, 0, 300)
+    MainFrame.Position = UDim2.new(0.5, -125, 0.5, -150)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Active = true
+    MainFrame.Draggable = true
+    MainFrame.Parent = ScreenGui
 
-local MainTab = Window:CreateTab("Principal", 4483362458)
+    -- UICorner para arredondar as bordas
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = MainFrame
 
--- Seção Auto-Farm
-local AutoFarmSection = MainTab:CreateSection("Auto-Farm")
+    -- Título
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Text = "PSX Auto-Farm"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 16
+    Title.Parent = MainFrame
 
-MainTab:CreateToggle({
-    Name = "Ativar Auto-Farm",
-    CurrentValue = false,
-    Flag = "AutoFarmEnabled",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.Enabled = Value
-        if Value then
+    -- Botão para fechar
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Name = "CloseButton"
+    CloseButton.Size = UDim2.new(0, 80, 0, 30)
+    CloseButton.Position = UDim2.new(0.5, -40, 1, -40)
+    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseButton.Text = "Fechar"
+    CloseButton.Font = Enum.Font.GothamBold
+    CloseButton.TextSize = 14
+    CloseButton.Parent = MainFrame
+
+    CloseButton.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+    end)
+
+    -- Função para criar um toggle
+    local function createToggle(name, defaultValue, callback)
+        local Frame = Instance.new("Frame")
+        Frame.Name = name .. "Frame"
+        Frame.Size = UDim2.new(1, -10, 0, 30)
+        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
+        Frame.BackgroundTransparency = 1
+        Frame.Parent = MainFrame
+
+        local Toggle = Instance.new("TextButton")
+        Toggle.Name = name .. "Toggle"
+        Toggle.Size = UDim2.new(0, 50, 0, 25)
+        Toggle.Position = UDim2.new(1, -55, 0, 2)
+        Toggle.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+        Toggle.Text = defaultValue and "ON" or "OFF"
+        Toggle.Font = Enum.Font.Gotham
+        Toggle.TextSize = 12
+        Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Toggle.Parent = Frame
+
+        local UICornerToggle = Instance.new("UICorner")
+        UICornerToggle.CornerRadius = UDim.new(0, 5)
+        UICornerToggle.Parent = Toggle
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = name .. "Label"
+        Label.Size = UDim2.new(1, -60, 1, 0)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.Text = name
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local isToggled = defaultValue
+        Toggle.MouseButton1Click:Connect(function()
+            isToggled = not isToggled
+            Toggle.BackgroundColor3 = isToggled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+            Toggle.Text = isToggled and "ON" or "OFF"
+            callback(isToggled)
+        end)
+    end
+
+    -- Função para criar um slider
+    local function createSlider(name, min, max, default, callback)
+        local Frame = Instance.new("Frame")
+        Frame.Name = name .. "Frame"
+        Frame.Size = UDim2.new(1, -10, 0, 60)
+        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
+        Frame.BackgroundTransparency = 1
+        Frame.Parent = MainFrame
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = name .. "Label"
+        Label.Size = UDim2.new(1, 0, 0, 20)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.Text = name .. ": " .. default
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local Slider = Instance.new("TextButton")
+        Slider.Name = name .. "Slider"
+        Slider.Size = UDim2.new(1, 0, 0, 30)
+        Slider.Position = UDim2.new(0, 0, 0, 25)
+        Slider.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        Slider.Text = ""
+        Slider.Parent = Frame
+
+        local UICornerSlider = Instance.new("UICorner")
+        UICornerSlider.CornerRadius = UDim.new(0, 5)
+        UICornerSlider.Parent = Slider
+
+        local Fill = Instance.new("Frame")
+        Fill.Name = "Fill"
+        Fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+        Fill.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+        Fill.BorderSizePixel = 0
+        Fill.Parent = Slider
+
+        local UICornerFill = Instance.new("UICorner")
+        UICornerFill.CornerRadius = UDim.new(0, 5)
+        UICornerFill.Parent = Fill
+
+        local dragging = false
+        local function updateSlider(input)
+            local sizeX = math.clamp((input.Position.X - Slider.AbsolutePosition.X) / Slider.AbsoluteSize.X, 0, 1)
+            local value = math.floor(min + (max - min) * sizeX)
+            Fill.Size = UDim2.new(sizeX, 0, 1, 0)
+            Label.Text = name .. ": " .. value
+            callback(value)
+        end
+
+        Slider.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                updateSlider(input)
+            end
+        end)
+
+        Slider.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+
+        game:GetService("UserInputService").InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateSlider(input)
+            end
+        end)
+    end
+
+    -- Cria os toggles
+    createToggle("Ativar Auto-Farm", Settings.AutoFarm.Enabled, function(value)
+        Settings.AutoFarm.Enabled = value
+        if value then
             ActivateMagnet()
         end
-    end
-})
+    end)
 
-MainTab:CreateToggle({
-    Name = "Modo Rápido (Unlegit)",
-    CurrentValue = false,
-    Flag = "FastMode",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.FastMode = Value
-    end
-})
+    createToggle("Modo Rápido", Settings.AutoFarm.FastMode, function(value)
+        Settings.AutoFarm.FastMode = value
+    end)
 
-MainTab:CreateToggle({
-    Name = "Coletar Drops",
-    CurrentValue = false,
-    Flag = "CollectDrops",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.CollectDrops = Value
-    end
-})
+    createToggle("Coletar Drops", Settings.AutoFarm.CollectDrops, function(value)
+        Settings.AutoFarm.CollectDrops = value
+    end)
 
-MainTab:CreateToggle({
-    Name = "Ativar Magnet",
-    CurrentValue = false,
-    Flag = "MagnetEnabled",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.MagnetEnabled = Value
-        if Value and Settings.AutoFarm.Enabled then
+    createToggle("Ativar Magnet", Settings.AutoFarm.MagnetEnabled, function(value)
+        Settings.AutoFarm.MagnetEnabled = value
+        if value and Settings.AutoFarm.Enabled then
             ActivateMagnet()
         end
-    end
-})
+    end)
 
-MainTab:CreateSlider({
-    Name = "Velocidade do Farm",
-    Range = {0.05, 2},
-    Increment = 0.05,
-    Suffix = "segundos",
-    CurrentValue = 0.3,
-    Flag = "FarmSpeed",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.FarmSpeed = Value
-    end
-})
+    -- Cria os sliders
+    createSlider("Velocidade", 0.05, 2, Settings.AutoFarm.FarmSpeed, function(value)
+        Settings.AutoFarm.FarmSpeed = value
+    end)
 
-MainTab:CreateSlider({
-    Name = "Distância Máxima",
-    Range = {10, 500},
-    Increment = 10,
-    Suffix = "studs",
-    CurrentValue = 150,
-    Flag = "MaxDistance",
-    SectionParent = AutoFarmSection,
-    Callback = function(Value)
-        Settings.AutoFarm.MaxDistance = Value
-    end
-})
+    createSlider("Distância Máxima", 10, 500, Settings.AutoFarm.MaxDistance, function(value)
+        Settings.AutoFarm.MaxDistance = value
+    end)
+end
 
--- Seção Configurações
-local SettingsSection = MainTab:CreateSection("Configurações")
-
-MainTab:CreateButton({
-    Name = "Fechar Script",
-    SectionParent = SettingsSection,
-    Callback = function()
-        Rayfield:Destroy()
-    end
-})
+-- Cria a UI
+createSimpleUI()
 
 -- Loop principal do autofarm
 coroutine.wrap(function()
