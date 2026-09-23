@@ -1,22 +1,17 @@
--- Script de autofarm para Pet Simulator X (versão corrigida e otimizada)
+-- Script de autofarm para Pet Simulator X (versão final)
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 
 -- Verifica se o jogo carregou
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- Bypass do anti-cheat (corrigido)
+-- Bypass do anti-cheat
 local banSuccess, banError = pcall(function()
     local Blunder = ReplicatedStorage:WaitForChild("X", 10):WaitForChild("Blunder", 10):WaitForChild("BlunderList", 10)
-    if not Blunder then error("Blunder não encontrado") end
-
     local BlunderModule = require(Blunder)
-    if not BlunderModule.getAndClear then error("getAndClear não encontrado") end
-
     local OldGet = BlunderModule.getAndClear
     setreadonly(BlunderModule, false)
     BlunderModule.getAndClear = function(...)
@@ -33,100 +28,45 @@ end)
 
 if not banSuccess then
     warn("Erro no bypass do anti-cheat: " .. banError)
-    LocalPlayer:Kick("Erro no bypass do anti-cheat. Tente novamente.")
     return
 end
 
--- Carrega a Library do jogo (com verificação de segurança)
-local Library
-local librarySuccess, libraryError = pcall(function()
-    Library = require(ReplicatedStorage:WaitForChild("Library"))
-    assert(Library, "Library não carregada")
-    while not Library.Loaded do task.wait() end
-end)
+-- Carrega a Library do jogo
+local Library = require(ReplicatedStorage:WaitForChild("Library"))
+while not Library.Loaded do task.wait() end
 
-if not librarySuccess then
-    warn("Erro ao carregar a Library: " .. libraryError)
-    LocalPlayer:Kick("Erro ao carregar a Library. Tente novamente.")
-    return
-end
+-- Aguarda o personagem carregar
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Aguarda o personagem carregar (com verificação de segurança)
-local Character, Humanoid, HumanoidRootPart
-local characterSuccess, characterError = pcall(function()
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    Humanoid = Character:WaitForChild("Humanoid", 10)
-    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart", 10)
-end)
-
-if not characterSuccess then
-    warn("Erro ao carregar o personagem: " .. characterError)
-    LocalPlayer:Kick("Erro ao carregar o personagem. Tente novamente.")
-    return
-end
-
--- Bypass da Network (corrigido)
+-- Bypass da Network
 local bypassSuccess, bypassError = pcall(function()
-    if not Library.Network then error("Network não encontrada") end
-    if not Library.Network.Invoke or not Library.Network.Fire then error("Invoke/Fire não encontrados") end
-
     hookfunction(debug.getupvalue(Library.Network.Invoke, 1), function(...) return true end)
 end)
 
 if not bypassSuccess then
     warn("Erro no bypass da Network: " .. bypassError)
-    LocalPlayer:Kick("Erro no bypass da Network. Tente novamente.")
     return
 end
 
--- Aguarda os scripts do jogo carregarem (com verificação de segurança)
-local coinsScript, petsScript
-local scriptsSuccess, scriptsError = pcall(function()
-    coinsScript = LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Coins", 10)
-    petsScript = LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Pets", 10)
-end)
+-- Aguarda os scripts do jogo carregarem
+local coinsScript = LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Coins", 10)
+local petsScript = LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Pets", 10)
+task.wait()
 
-if not scriptsSuccess then
-    warn("Erro ao carregar os scripts do jogo: " .. scriptsError)
-    LocalPlayer:Kick("Erro ao carregar os scripts do jogo. Tente novamente.")
-    return
-end
+-- Obtém as tabelas e funções necessárias
+local CoinsTable = debug.getupvalue(getsenv(coinsScript).DestroyAllCoins, 1)
+local RenderedPets = debug.getupvalue(getsenv(petsScript).NetworkUpdate, 1)
 
--- Obtém as tabelas e funções necessárias (com verificação de segurança)
-local CoinsTable, RenderedPets, GetRemoteFunction
-local tablesSuccess, tablesError = pcall(function()
-    CoinsTable = debug.getupvalue(getsenv(coinsScript).DestroyAllCoins, 1)
-    RenderedPets = debug.getupvalue(getsenv(petsScript).NetworkUpdate, 1)
-    GetRemoteFunction = debug.getupvalue(Library.Network.Invoke, 2)
-end)
-
-if not tablesSuccess then
-    warn("Erro ao obter tabelas e funções: " .. tablesError)
-    LocalPlayer:Kick("Erro ao obter tabelas e funções. Tente novamente.")
-    return
-end
-
--- Configurações padrão (com valores seguros)
+-- Configurações padrão
 local enableAutoFarm = false
 local AutoFarm_FastMode = false
 local AutoFarm_FarmSpeed = 0.3
 local farmMaxDistance = 150
-local FarmFocusList = {"Fruits", "Highest Multiplier", "Diamonds", "Lowest Life", "Highest Life", "Nearest", "Longest"}
 local FarmUtilities_CollectDrops = false
-local FarmUtilities_CurrentOrbs = {}
-local fastPets = false
-local instantFall = false
-local EnableAutoHatch = false
-local LastOpenEggId = "None"
-local LastHatchSetting = "Normal"
-local enableAutoDaycare = false
-local Automations_AutoGameComplete = false
-local Webhook_Enabled = false
-local Webhook_URL = ""
-local Webhook_Daycare = true
-local Webhook_Huge = true
 
--- Funções originais do script (com verificações de segurança)
+-- Funções principais
 local function CalcMultiplier(coinBonus)
     if not coinBonus then return 0 end
     local totalMultiplier = 0
@@ -143,7 +83,6 @@ local function CalcMultiplier(coinBonus)
 end
 
 local function GetCoinLowestPriority(mainCoin, coinToCompare)
-    if not mainCoin or not coinToCompare then return 9999999 end
     local coin = Library.Directory.Coins[mainCoin.n]
     local coinCompare = Library.Directory.Coins[coinToCompare.n]
     if not coin or not coinCompare then return 9999999 end
@@ -156,6 +95,17 @@ local function GetCoinLowestPriority(mainCoin, coinToCompare)
     local coinHighestMultiplier = CalcMultiplier(mainCoin.b) > CalcMultiplier(coinToCompare.b)
 
     local coinPriority = 9999999
+
+    -- Prioridades padrão
+    local FarmFocusList = {
+        "Fruits",
+        "Highest Multiplier",
+        "Diamonds",
+        "Lowest Life",
+        "Highest Life",
+        "Nearest",
+        "Longest"
+    }
 
     for priority, priorityName in ipairs(FarmFocusList) do
         if priorityName == "Fruits" and coinIsFruit then
@@ -193,7 +143,7 @@ local function SortCoinsByPriorityFastMode(coins)
         if not coin then continue end
         coin.coinId = coinId
         local distance = (playerPosition - coin.p).magnitude
-        if distance <= farmMaxDistance and Library.WorldCmds.HasArea(coin.a) then
+        if distance <= farmMaxDistance then  -- Removida a restrição de área
             table.insert(sortedCoins, coin)
         end
     end
@@ -207,7 +157,7 @@ local function SortCoinsByPriorityFastMode(coins)
     return sortedCoins
 end
 
--- Função para criar a UI (simplificada e otimizada)
+-- Função para criar a UI (corrigida e simplificada)
 local function createUI()
     local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
     local ScreenGui = Instance.new("ScreenGui")
@@ -219,31 +169,36 @@ local function createUI()
     -- Frame principal
     local MainFrame = Instance.new("Frame")
     MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 300, 0, 400)
-    MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+    MainFrame.Size = UDim2.new(0, 250, 0, 200)
+    MainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
     MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
     MainFrame.BorderSizePixel = 0
     MainFrame.Active = true
     MainFrame.Draggable = true
     MainFrame.Parent = ScreenGui
 
+    -- UICorner para arredondar as bordas
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = MainFrame
+
     -- Título
     local Title = Instance.new("TextLabel")
     Title.Name = "Title"
-    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Size = UDim2.new(1, 0, 0, 30)
     Title.Position = UDim2.new(0, 0, 0, 0)
     Title.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
     Title.Text = "PSX Auto-Farm"
     Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 18
+    Title.TextSize = 16
     Title.Parent = MainFrame
 
-    -- Botão para fechar
+    -- Botão para fechar (corrigido)
     local CloseButton = Instance.new("TextButton")
     CloseButton.Name = "CloseButton"
-    CloseButton.Size = UDim2.new(0, 100, 0, 30)
-    CloseButton.Position = UDim2.new(0.5, -50, 1, -40)
+    CloseButton.Size = UDim2.new(0, 80, 0, 30)
+    CloseButton.Position = UDim2.new(0.5, -40, 1, -40)
     CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
     CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     CloseButton.Text = "Fechar"
@@ -255,25 +210,33 @@ local function createUI()
         ScreenGui:Destroy()
     end)
 
-    -- Função para criar um toggle
+    -- Função para criar um toggle funcional
     local function createToggle(name, defaultValue, callback)
         local Frame = Instance.new("Frame")
         Frame.Name = name .. "Frame"
         Frame.Size = UDim2.new(1, -10, 0, 30)
+        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
         Frame.BackgroundTransparency = 1
         Frame.Parent = MainFrame
 
         local Toggle = Instance.new("TextButton")
         Toggle.Name = name .. "Toggle"
-        Toggle.Size = UDim2.new(0, 30, 0, 30)
-        Toggle.Position = UDim2.new(1, -35, 0, 0)
+        Toggle.Size = UDim2.new(0, 50, 0, 25)
+        Toggle.Position = UDim2.new(1, -55, 0, 2)
         Toggle.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-        Toggle.Text = ""
+        Toggle.Text = defaultValue and "ON" or "OFF"
+        Toggle.Font = Enum.Font.Gotham
+        Toggle.TextSize = 12
+        Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
         Toggle.Parent = Frame
+
+        local UICornerToggle = Instance.new("UICorner")
+        UICornerToggle.CornerRadius = UDim.new(0, 5)
+        UICornerToggle.Parent = Toggle
 
         local Label = Instance.new("TextLabel")
         Label.Name = name .. "Label"
-        Label.Size = UDim2.new(1, -40, 1, 0)
+        Label.Size = UDim2.new(1, -60, 1, 0)
         Label.BackgroundTransparency = 1
         Label.TextColor3 = Color3.fromRGB(255, 255, 255)
         Label.Text = name
@@ -286,12 +249,13 @@ local function createUI()
         Toggle.MouseButton1Click:Connect(function()
             isToggled = not isToggled
             Toggle.BackgroundColor3 = isToggled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+            Toggle.Text = isToggled and "ON" or "OFF"
             callback(isToggled)
         end)
     end
 
-    -- Cria os toggles
-    createToggle("Ativar Auto-Farm", enableAutoFarm, function(value)
+    -- Cria os toggles funcionais
+    createToggle("Auto-Farm", enableAutoFarm, function(value)
         enableAutoFarm = value
     end)
 
@@ -303,7 +267,65 @@ local function createUI()
         FarmUtilities_CollectDrops = value
     end)
 
-    -- Loop principal do autofarm (com verificações de segurança)
+    -- Função para criar uma caixa de texto
+    local function createTextBox(name, defaultValue, callback)
+        local Frame = Instance.new("Frame")
+        Frame.Name = name .. "Frame"
+        Frame.Size = UDim2.new(1, -10, 0, 60)
+        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
+        Frame.BackgroundTransparency = 1
+        Frame.Parent = MainFrame
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = name .. "Label"
+        Label.Size = UDim2.new(1, 0, 0, 20)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.Text = name
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local TextBox = Instance.new("TextBox")
+        TextBox.Name = name .. "TextBox"
+        TextBox.Size = UDim2.new(1, 0, 0, 30)
+        TextBox.Position = UDim2.new(0, 0, 0, 25)
+        TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TextBox.Text = defaultValue
+        TextBox.Font = Enum.Font.Gotham
+        TextBox.TextSize = 14
+        TextBox.PlaceholderText = "Digite o valor"
+        TextBox.Parent = Frame
+
+        local UICornerTextBox = Instance.new("UICorner")
+        UICornerTextBox.CornerRadius = UDim.new(0, 5)
+        UICornerTextBox.Parent = TextBox
+
+        TextBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                callback(TextBox.Text)
+            end
+        end)
+    end
+
+    -- Cria as caixas de texto
+    createTextBox("Velocidade (seg)", tostring(AutoFarm_FarmSpeed), function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            AutoFarm_FarmSpeed = numValue
+        end
+    end)
+
+    createTextBox("Distância Máx (studs)", tostring(farmMaxDistance), function(value)
+        local numValue = tonumber(value)
+        if numValue then
+            farmMaxDistance = numValue
+        end
+    end)
+
+    -- Loop principal do autofarm
     coroutine.wrap(function()
         while true do
             if enableAutoFarm then
