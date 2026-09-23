@@ -1,4 +1,4 @@
--- Script de autofarm para Pet Simulator X (versão final)
+-- Script de autofarm para Pet Simulator X com UI Rayfield Gen2
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -60,11 +60,16 @@ local CoinsTable = debug.getupvalue(getsenv(coinsScript).DestroyAllCoins, 1)
 local RenderedPets = debug.getupvalue(getsenv(petsScript).NetworkUpdate, 1)
 
 -- Configurações padrão
-local enableAutoFarm = false
-local AutoFarm_FastMode = false
-local AutoFarm_FarmSpeed = 0.3
-local farmMaxDistance = 150
-local FarmUtilities_CollectDrops = false
+local Settings = {
+    AutoFarm = {
+        Enabled = false,
+        FastMode = false,
+        FarmSpeed = 0.3,
+        MaxDistance = 150,
+        CollectDrops = false,
+        MagnetEnabled = false
+    }
+}
 
 -- Funções principais
 local function CalcMultiplier(coinBonus)
@@ -143,7 +148,7 @@ local function SortCoinsByPriorityFastMode(coins)
         if not coin then continue end
         coin.coinId = coinId
         local distance = (playerPosition - coin.p).magnitude
-        if distance <= farmMaxDistance then  -- Removida a restrição de área
+        if distance <= Settings.AutoFarm.MaxDistance then
             table.insert(sortedCoins, coin)
         end
     end
@@ -157,208 +162,167 @@ local function SortCoinsByPriorityFastMode(coins)
     return sortedCoins
 end
 
--- Função para criar a UI (corrigida e simplificada)
-local function createUI()
-    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "PSX_AutoFarm_UI"
-    ScreenGui.Parent = PlayerGui
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.IgnoreGuiInset = true
-
-    -- Frame principal
-    local MainFrame = Instance.new("Frame")
-    MainFrame.Name = "MainFrame"
-    MainFrame.Size = UDim2.new(0, 250, 0, 200)
-    MainFrame.Position = UDim2.new(0.5, -125, 0.5, -100)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    MainFrame.BorderSizePixel = 0
-    MainFrame.Active = true
-    MainFrame.Draggable = true
-    MainFrame.Parent = ScreenGui
-
-    -- UICorner para arredondar as bordas
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 10)
-    UICorner.Parent = MainFrame
-
-    -- Título
-    local Title = Instance.new("TextLabel")
-    Title.Name = "Title"
-    Title.Size = UDim2.new(1, 0, 0, 30)
-    Title.Position = UDim2.new(0, 0, 0, 0)
-    Title.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.Text = "PSX Auto-Farm"
-    Title.Font = Enum.Font.GothamBold
-    Title.TextSize = 16
-    Title.Parent = MainFrame
-
-    -- Botão para fechar (corrigido)
-    local CloseButton = Instance.new("TextButton")
-    CloseButton.Name = "CloseButton"
-    CloseButton.Size = UDim2.new(0, 80, 0, 30)
-    CloseButton.Position = UDim2.new(0.5, -40, 1, -40)
-    CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    CloseButton.Text = "Fechar"
-    CloseButton.Font = Enum.Font.GothamBold
-    CloseButton.TextSize = 14
-    CloseButton.Parent = MainFrame
-
-    CloseButton.MouseButton1Click:Connect(function()
-        ScreenGui:Destroy()
-    end)
-
-    -- Função para criar um toggle funcional
-    local function createToggle(name, defaultValue, callback)
-        local Frame = Instance.new("Frame")
-        Frame.Name = name .. "Frame"
-        Frame.Size = UDim2.new(1, -10, 0, 30)
-        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
-        Frame.BackgroundTransparency = 1
-        Frame.Parent = MainFrame
-
-        local Toggle = Instance.new("TextButton")
-        Toggle.Name = name .. "Toggle"
-        Toggle.Size = UDim2.new(0, 50, 0, 25)
-        Toggle.Position = UDim2.new(1, -55, 0, 2)
-        Toggle.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-        Toggle.Text = defaultValue and "ON" or "OFF"
-        Toggle.Font = Enum.Font.Gotham
-        Toggle.TextSize = 12
-        Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Toggle.Parent = Frame
-
-        local UICornerToggle = Instance.new("UICorner")
-        UICornerToggle.CornerRadius = UDim.new(0, 5)
-        UICornerToggle.Parent = Toggle
-
-        local Label = Instance.new("TextLabel")
-        Label.Name = name .. "Label"
-        Label.Size = UDim2.new(1, -60, 1, 0)
-        Label.BackgroundTransparency = 1
-        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Label.Text = name
-        Label.Font = Enum.Font.Gotham
-        Label.TextSize = 14
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Frame
-
-        local isToggled = defaultValue
-        Toggle.MouseButton1Click:Connect(function()
-            isToggled = not isToggled
-            Toggle.BackgroundColor3 = isToggled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
-            Toggle.Text = isToggled and "ON" or "OFF"
-            callback(isToggled)
+local function ActivateMagnet()
+    if Settings.AutoFarm.MagnetEnabled then
+        local magnetSuccess, magnetError = pcall(function()
+            Library.Network.Fire("Activate Magnet", true)
         end)
-    end
-
-    -- Cria os toggles funcionais
-    createToggle("Auto-Farm", enableAutoFarm, function(value)
-        enableAutoFarm = value
-    end)
-
-    createToggle("Modo Rápido", AutoFarm_FastMode, function(value)
-        AutoFarm_FastMode = value
-    end)
-
-    createToggle("Coletar Drops", FarmUtilities_CollectDrops, function(value)
-        FarmUtilities_CollectDrops = value
-    end)
-
-    -- Função para criar uma caixa de texto
-    local function createTextBox(name, defaultValue, callback)
-        local Frame = Instance.new("Frame")
-        Frame.Name = name .. "Frame"
-        Frame.Size = UDim2.new(1, -10, 0, 60)
-        Frame.Position = UDim2.new(0, 5, 0, 40 + (#MainFrame:GetChildren() * 35))
-        Frame.BackgroundTransparency = 1
-        Frame.Parent = MainFrame
-
-        local Label = Instance.new("TextLabel")
-        Label.Name = name .. "Label"
-        Label.Size = UDim2.new(1, 0, 0, 20)
-        Label.BackgroundTransparency = 1
-        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        Label.Text = name
-        Label.Font = Enum.Font.Gotham
-        Label.TextSize = 14
-        Label.TextXAlignment = Enum.TextXAlignment.Left
-        Label.Parent = Frame
-
-        local TextBox = Instance.new("TextBox")
-        TextBox.Name = name .. "TextBox"
-        TextBox.Size = UDim2.new(1, 0, 0, 30)
-        TextBox.Position = UDim2.new(0, 0, 0, 25)
-        TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-        TextBox.Text = defaultValue
-        TextBox.Font = Enum.Font.Gotham
-        TextBox.TextSize = 14
-        TextBox.PlaceholderText = "Digite o valor"
-        TextBox.Parent = Frame
-
-        local UICornerTextBox = Instance.new("UICorner")
-        UICornerTextBox.CornerRadius = UDim.new(0, 5)
-        UICornerTextBox.Parent = TextBox
-
-        TextBox.FocusLost:Connect(function(enterPressed)
-            if enterPressed then
-                callback(TextBox.Text)
-            end
-        end)
-    end
-
-    -- Cria as caixas de texto
-    createTextBox("Velocidade (seg)", tostring(AutoFarm_FarmSpeed), function(value)
-        local numValue = tonumber(value)
-        if numValue then
-            AutoFarm_FarmSpeed = numValue
+        if not magnetSuccess then
+            warn("Erro ao ativar Magnet: " .. magnetError)
         end
-    end)
+    end
+end
 
-    createTextBox("Distância Máx (studs)", tostring(farmMaxDistance), function(value)
-        local numValue = tonumber(value)
-        if numValue then
-            farmMaxDistance = numValue
+-- Carrega a UI Rayfield Gen2
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "PSX Auto-Farm | by Sirius",
+    LoadingTitle = "Carregando Auto-Farm",
+    LoadingSubtitle = "por Sirius",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "SiriusPSX",
+        FileName = "AutoFarmConfig"
+    },
+    KeySystem = false
+})
+
+local MainTab = Window:CreateTab("Principal", 4483362458)
+
+-- Seção Auto-Farm
+local AutoFarmSection = MainTab:CreateSection("Auto-Farm")
+
+MainTab:CreateToggle({
+    Name = "Ativar Auto-Farm",
+    CurrentValue = false,
+    Flag = "AutoFarmEnabled",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.Enabled = Value
+        if Value then
+            ActivateMagnet()
         end
-    end)
+    end
+})
 
-    -- Loop principal do autofarm
-    coroutine.wrap(function()
-        while true do
-            if enableAutoFarm then
-                local success, errorMsg = pcall(function()
-                    CoinsTable = debug.getupvalue(getsenv(coinsScript).DestroyAllCoins, 1)
-                    RenderedPets = debug.getupvalue(getsenv(petsScript).NetworkUpdate, 1)
+MainTab:CreateToggle({
+    Name = "Modo Rápido (Unlegit)",
+    CurrentValue = false,
+    Flag = "FastMode",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.FastMode = Value
+    end
+})
 
-                    if AutoFarm_FastMode then
-                        local foundCoins = SortCoinsByPriorityFastMode(CoinsTable)
-                        local equippedPets = Library.PetCmds.GetEquipped()
-                        if equippedPets and #equippedPets > 0 and #foundCoins > 0 then
-                            for _, pet in pairs(equippedPets) do
-                                if #foundCoins == 0 then break end
-                                local selectedCoin = foundCoins[1]
-                                if selectedCoin then
-                                    Library.Network.Invoke("Join Coin", selectedCoin.coinId, {pet.uid})
-                                    Library.Network.Fire("Farm Coin", selectedCoin.coinId, pet.uid)
-                                    table.remove(foundCoins, 1)
-                                    task.wait(AutoFarm_FarmSpeed)
-                                end
+MainTab:CreateToggle({
+    Name = "Coletar Drops",
+    CurrentValue = false,
+    Flag = "CollectDrops",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.CollectDrops = Value
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "Ativar Magnet",
+    CurrentValue = false,
+    Flag = "MagnetEnabled",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.MagnetEnabled = Value
+        if Value and Settings.AutoFarm.Enabled then
+            ActivateMagnet()
+        end
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Velocidade do Farm",
+    Range = {0.05, 2},
+    Increment = 0.05,
+    Suffix = "segundos",
+    CurrentValue = 0.3,
+    Flag = "FarmSpeed",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.FarmSpeed = Value
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Distância Máxima",
+    Range = {10, 500},
+    Increment = 10,
+    Suffix = "studs",
+    CurrentValue = 150,
+    Flag = "MaxDistance",
+    SectionParent = AutoFarmSection,
+    Callback = function(Value)
+        Settings.AutoFarm.MaxDistance = Value
+    end
+})
+
+-- Seção Configurações
+local SettingsSection = MainTab:CreateSection("Configurações")
+
+MainTab:CreateButton({
+    Name = "Fechar Script",
+    SectionParent = SettingsSection,
+    Callback = function()
+        Rayfield:Destroy()
+    end
+})
+
+-- Loop principal do autofarm
+coroutine.wrap(function()
+    while true do
+        if Settings.AutoFarm.Enabled then
+            local success, errorMsg = pcall(function()
+                CoinsTable = debug.getupvalue(getsenv(coinsScript).DestroyAllCoins, 1)
+                RenderedPets = debug.getupvalue(getsenv(petsScript).NetworkUpdate, 1)
+
+                if Settings.AutoFarm.FastMode then
+                    local foundCoins = SortCoinsByPriorityFastMode(CoinsTable)
+                    local equippedPets = Library.PetCmds.GetEquipped()
+                    if equippedPets and #equippedPets > 0 and #foundCoins > 0 then
+                        for _, pet in pairs(equippedPets) do
+                            if #foundCoins == 0 then break end
+                            local selectedCoin = foundCoins[1]
+                            if selectedCoin then
+                                Library.Network.Invoke("Join Coin", selectedCoin.coinId, {pet.uid})
+                                Library.Network.Fire("Farm Coin", selectedCoin.coinId, pet.uid)
+                                table.remove(foundCoins, 1)
+                                task.wait(Settings.AutoFarm.FarmSpeed)
                             end
                         end
                     end
-                end)
-
-                if not success then
-                    warn("Erro no autofarm: " .. errorMsg)
                 end
-            end
-            task.wait(0.1)
-        end
-    end)()
-end
+            end)
 
--- Cria a UI
-createUI()
+            if not success then
+                warn("Erro no autofarm: " .. errorMsg)
+            end
+        end
+        task.wait(0.1)
+    end
+end)()
+
+-- Eventos para coletar drops
+Library.Things:FindFirstChild("Lootbags").ChildAdded:Connect(function(child)
+    if Settings.AutoFarm.CollectDrops and child then
+        pcall(function()
+            Library.Network.Fire("Collect Lootbag", child.Name, HumanoidRootPart.Position + Vector3.new(math.random(-0.05, 0.05), math.random(-0.05, 0.05), math.random(-0.05, 0.05)))
+        end)
+    end
+end)
+
+Library.Things:FindFirstChild("Orbs").ChildAdded:Connect(function(child)
+    if Settings.AutoFarm.CollectDrops and child then
+        pcall(function()
+            Library.Network.Fire("Claim Orbs", {child.Name})
+        end)
+    end
+end)
