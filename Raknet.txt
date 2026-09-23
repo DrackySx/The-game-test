@@ -1,0 +1,525 @@
+-- Script de autofarm para Pet Simulator X (baseado 100% no script do Rafa)
+-- UI melhorada com suporte para mobile/PC e botão de ocultar
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+
+-- Bypass do anti-cheat (item 1 - EXATAMENTE como no script original)
+local banSuccess, banError = pcall(function()
+    local Blunder = require(ReplicatedStorage:WaitForChild("X", 10):WaitForChild("Blunder", 10):WaitForChild("BlunderList", 10))
+    if not Blunder or not Blunder.getAndClear then
+        LocalPlayer:Kick("Error while bypassing the anti-cheat! (Didn't find blunder)")
+    end
+
+    local OldGet = Blunder.getAndClear
+    setreadonly(Blunder, false)
+    local function OutputData(Message)
+        print("-- PET SIM X BLUNDER --")
+        print(Message .. "\n")
+    end
+
+    Blunder.getAndClear = function(...)
+        local Packet = ...
+        for i, v in next, Packet.list do
+            if v.message ~= "PING" then
+                OutputData(v.message)
+                table.remove(Packet.list, i)
+            end
+        end
+        return OldGet(Packet)
+    end
+
+    setreadonly(Blunder, true)
+end)
+
+if not banSuccess then
+    LocalPlayer:Kick("Error while bypassing the anti-cheat! (" .. banError .. ")")
+    return
+end
+
+-- Carrega a Library do jogo (EXATAMENTE como no script original)
+local Library = require(ReplicatedStorage:WaitForChild("Library"))
+assert(Library, "Oopps! Library has not been loaded. Maybe try re-joining?")
+while not Library.Loaded do task.wait() end
+
+-- Aguarda o personagem carregar (EXATAMENTE como no script original)
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Bypass da Network (EXATAMENTE como no script original)
+local bypassSuccess, bypassError = pcall(function()
+    if not Library.Network then
+        LocalPlayer:Kick("Network not found, can't bypass!")
+    end
+
+    if not Library.Network.Invoke or not Library.Network.Fire then
+        LocalPlayer:Kick("Network Invoke/Fire was not found! Failed to bypass!")
+    end
+
+    hookfunction(debug.getupvalue(Library.Network.Invoke, 1), function(...) return true end)
+
+    local originalPlay = Library.Audio.Play
+    Library.Audio.Play = function(...)
+        if checkcaller() then
+            local audioId, parent, pitch, volume, maxDistance, group, looped, timePosition = unpack({ ... })
+            if type(audioId) == "table" then
+                audioId = audioId[Random.new():NextInteger(1, #audioId)]
+            end
+            if not parent then
+                warn("Parent cannot be nil", debug.traceback())
+                return nil
+            end
+            if audioId == 0 then return nil end
+
+            if type(audioId) == "number" or not string.find(audioId, "rbxassetid://", 1, true) then
+                audioId = "rbxassetid://" .. audioId
+            end
+            if pitch and type(pitch) == "table" then
+                pitch = Random.new():NextNumber(unpack(pitch))
+            end
+            if volume and type(volume) == "table" then
+                volume = Random.new():NextNumber(unpack(volume))
+            end
+            if group then
+                local soundGroup = game.SoundService:FindFirstChild(group) or nil
+            else
+                soundGroup = nil
+            end
+            if timePosition == nil then
+                timePosition = 0
+            else
+                timePosition = timePosition
+            end
+            local isGargabe = false
+            if not pcall(function() local _ = parent.Parent end) then
+                local newParent = parent
+                pcall(function()
+                    newParent = CFrame.new(newParent)
+                end)
+                parent = Instance.new("Part")
+                parent.Anchored = true
+                parent.CanCollide = false
+                parent.CFrame = newParent
+                parent.Size = Vector3.new()
+                parent.Transparency = 1
+                parent.Parent = workspace:WaitForChild("__DEBRIS")
+                isGargabe = true
+            end
+            local sound = Instance.new("Sound")
+            sound.SoundId = audioId
+            sound.Name = "sound-" .. audioId
+            sound.Pitch = pitch and 1
+            sound.Volume = volume and 0.5
+            sound.SoundGroup = soundGroup
+            sound.Looped = looped and false
+            sound.MaxDistance = maxDistance and 100
+            sound.TimePosition = timePosition
+            sound.RollOffMode = Enum.RollOffMode.Linear
+            sound.Parent = parent
+            if not require(ReplicatedStorage:WaitForChild("Library"):WaitForChild("Client")).Settings.SoundsEnabled then
+                sound:SetAttribute("CachedVolume", sound.Volume)
+                sound.Volume = 0
+            end
+            sound:Play()
+            getfenv(originalPlay).AddToGarbageCollection(sound, isGargabe)
+            return sound
+        end
+
+        return originalPlay(...)
+    end
+end)
+
+if not bypassSuccess then
+    print(bypassError)
+    LocalPlayer:Kick("Error while bypassing network, try again or wait for an update!")
+    return
+end
+
+-- Aguarda os scripts do jogo carregarem (EXATAMENTE como no script original)
+LocalPlayer.PlayerScripts:WaitForChild("Scripts", 10):WaitForChild("Game", 10):WaitForChild("Coins", 10)
+LocalPlayer.PlayerScripts:WaitForChild("Scripts", 10):WaitForChild("Game", 10):WaitForChild("Pets", 10)
+task.wait()
+
+-- Obtém as tabelas e funções necessárias (EXATAMENTE como no script original)
+local CoinsTable = debug.getupvalue(getsenv(LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Coins", 10)).DestroyAllCoins, 1)
+local RenderedPets = debug.getupvalue(getsenv(LocalPlayer.PlayerScripts.Scripts.Game:WaitForChild("Pets", 10)).NetworkUpdate, 1)
+local GetRemoteFunction = debug.getupvalue(Library.Network.Invoke, 2)
+local OpenEggInstance = GetRemoteFunction("Buy Egg")
+
+-- Configurações padrão (EXATAMENTE como no script original)
+local enableAutoFarm = false
+local AutoFarm_FastMode = false
+local AutoFarm_FarmSpeed = 0.3
+local farmMaxDistance = 150
+local FarmFocusList = {"Fruits", "Highest Multiplier", "Diamonds", "Lowest Life", "Highest Life", "Nearest", "Longest"}
+local FarmUtilities_CollectDrops = false
+local FarmUtilities_CurrentOrbs = {}
+local fastPets = false
+local instantFall = false
+local EnableAutoHatch = false
+local LastOpenEggId = "None"
+local LastHatchSetting = "Normal"
+local enableAutoDaycare = false
+local Automations_AutoGameComplete = false
+local Webhook_Enabled = false
+local Webhook_URL = ""
+local Webhook_Daycare = true
+local Webhook_Huge = true
+
+-- Funções originais do script (item 3 ao 11 - EXATAMENTE como no script original)
+local function CalcMultiplier(coinBonus)
+    if not coinBonus then return 0 end
+    local totalMultiplier = 0
+    if coinBonus.l then
+        for _, v in pairs(coinBonus.l) do
+            pcall(function()
+                if v.m and tonumber(v.m) then
+                    totalMultiplier = totalMultiplier + v.m
+                end
+            end)
+        end
+    end
+    return totalMultiplier
+end
+
+local function GetCoinLowestPriority(mainCoin, coinToCompare)
+    local coin = Library.Directory.Coins[mainCoin.n]
+    local coinCompare = Library.Directory.Coins[coinToCompare.n]
+
+    local aMagnitude = (HumanoidRootPart.Position - mainCoin.p).magnitude
+    local bMagnitude = (HumanoidRootPart.Position - coinToCompare.p).magnitude
+
+    local coinIsFruit = coin.breakSound == "fruit"
+    local coinIsDiamond = coin.currencyType == "Diamonds"
+    local coinHighestMultiplier = CalcMultiplier(mainCoin.b) > CalcMultiplier(coinToCompare.b)
+
+    local coinPriority = 9999999
+
+    for priority, priorityName in ipairs(FarmFocusList) do
+        if priorityName == "Fruits" and coinIsFruit then
+            coinPriority = priority
+            break
+        elseif priorityName == "Highest Multiplier" and coinHighestMultiplier then
+            coinPriority = priority
+            break
+        elseif priorityName == "Diamonds" and coinIsDiamond then
+            coinPriority = priority
+            break
+        elseif priorityName == "Lowest Life" and coin.health < coinCompare.health then
+            coinPriority = priority
+            break
+        elseif priorityName == "Highest Life" and coin.health > coinCompare.health then
+            coinPriority = priority
+            break
+        elseif priorityName == "Nearest" and aMagnitude < bMagnitude then
+            coinPriority = priority
+            break
+        elseif priorityName == "Longest" and aMagnitude > bMagnitude then
+            coinPriority = priority
+            break
+        end
+    end
+
+    return coinPriority
+end
+
+local function SortCoinsByPriorityFastMode(coins)
+    local sortedCoins = {}
+    local playerPosition = HumanoidRootPart.Position
+
+    for coinId, coin in pairs(coins) do
+        coin.coinId = coinId
+        local distance = (playerPosition - coin.p).magnitude
+        if distance <= farmMaxDistance and Library.WorldCmds.HasArea(coin.a) then
+            table.insert(sortedCoins, coin)
+        end
+    end
+
+    table.sort(sortedCoins, function(a, b)
+        local APriority = GetCoinLowestPriority(a, b)
+        local BPriority = GetCoinLowestPriority(b, a)
+        return APriority < BPriority
+    end)
+
+    return sortedCoins
+end
+
+local function CollectAllOrbs()
+    pcall(function()
+        local OrbsToCollect = {}
+        for orbId, orb in pairs(Library.Things:FindFirstChild("Orbs"):GetChildren()) do
+            if orbId and orb then
+                table.insert(OrbsToCollect, orb.Name)
+            end
+        end
+
+        if OrbsToCollect and #OrbsToCollect > 0 and FarmUtilities_CollectDrops then
+            Library.Network.Fire("Claim Orbs", OrbsToCollect)
+        end
+    end)
+end
+
+local function CollectAllLootbags()
+    pcall(function()
+        for _, lootbag in pairs(Library.Things:FindFirstChild("Lootbags"):GetChildren()) do
+            if lootbag and not lootbag:GetAttribute("Collected") then
+                Library.Network.Fire("Collect Lootbag", lootbag.Name, HumanoidRootPart.Position + Vector3.new(math.random(-0.05, 0.05), math.random(-0.05, 0.05), math.random(-0.05, 0.05)))
+                wait(0.03)
+            end
+        end
+    end)
+end
+
+local function IsEggUnlocked(eggId)
+    local egg = Library.Directory.Eggs[eggId]
+    local saveData = Library.Save.Get()
+    if egg.areaRequired then
+        if not Library.WorldCmds.HasArea(egg.area) then
+            return false
+        end
+    end
+
+    if egg.eggRequired ~= "" then
+        if egg.eggRequired ~= eggId then
+            if not IsEggUnlocked(egg.eggRequired) then
+                return false
+            end
+        end
+    end
+
+    if egg.eggRequiredOpenAmount > 0 then
+        if egg.eggRequired ~= "" then
+            local eggsHatched = (IsHardcore and saveData.Hardcore.EggsOpened or saveData.EggsOpened)[egg.eggRequired]
+            if eggsHatched then
+                if eggsHatched < egg.eggRequiredOpenAmount then
+                    return false
+                end
+            else
+                return false
+            end
+        end
+    end
+
+    if eggId == "Dominus Egg" then
+        if IsHardcore and not saveData.Hardcore.OwnsDominusGate then return false end
+        if not IsHardcore and not saveData.OwnsDominusGate then return false end
+    elseif eggId == "Hacker Egg" or eggId == "Hacker Golden Egg" then
+        if IsHardcore and not saveData.Hardcore.OwnsHackerGate then return false end
+        if not IsHardcore and not saveData.OwnsHackerGate then return false end
+    end
+
+    return true
+end
+
+local function HatchEgg(eggId, tripleHatch, octupleHatch, teleportToEgg)
+    if not eggId or eggId == "None" then return false, "No egg provided!" end
+    local eggToHatch = Library.Directory.Eggs[eggId]
+    if not eggToHatch then return false, "Didn't found this egg!" end
+
+    if tripleHatch == nil then tripleHatch = false end
+    if octupleHatch == nil then octupleHatch = false end
+
+    if not eggToHatch.hatchable or eggToHatch.disabled then return false, "This is egg is not available!" end
+    if not IsEggUnlocked(eggId) then return false, "This egg is not unlocked yet!" end
+
+    local eggArea = Library.Directory.Areas[eggToHatch.area]
+    if eggArea then
+        if teleportToEgg and Library.WorldCmds.Get() ~= eggArea.world then
+            Library.WorldCmds.Load(eggArea.world)
+            wait(0.25)
+        elseif not teleportToEgg and Library.WorldCmds.Get() ~= eggArea.world then return false, "You're not in the right world!" end
+
+        local mapEgg = nil
+        for i, v in pairs(Library.WorldCmds.GetAllEggs()) do
+            if v:GetAttribute("ID") and v:GetAttribute("ID") == eggId then
+                mapEgg = v
+                break
+            end
+        end
+
+        if not mapEgg then return false, "Didn't found the egg in map!" end
+
+        local isNearEgg = Library.LocalPlayer:DistanceFromCharacter(mapEgg.PrimaryPart.CFrame.p) <= 30
+        if teleportToEgg and not isNearEgg then
+            HumanoidRootPart.CFrame = CFrame.new(mapEgg.PrimaryPart.CFrame.p) + (mapEgg.PrimaryPart.CFrame.RightVector * 10)
+            wait(0.25)
+        elseif not teleportToEgg and not isNearEgg then return false, "You're too far from the egg!" end
+    end
+
+    return Library.Network.Invoke("Buy Egg", eggId, tripleHatch, octupleHatch)
+end
+
+-- Função para criar a UI (MELHORADA, mas sem interferir no funcionamento)
+local function createUI()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "PSX_AutoFarm_UI"
+    ScreenGui.Parent = PlayerGui
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
+
+    -- Frame principal (arrastável)
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Size = UDim2.new(0, 300, 0, 400)
+    MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Active = true
+    MainFrame.Draggable = true
+    MainFrame.Parent = ScreenGui
+
+    -- UICorner para arredondar as bordas
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = MainFrame
+
+    -- Título
+    local Title = Instance.new("TextLabel")
+    Title.Name = "Title"
+    Title.Size = UDim2.new(1, 0, 0, 40)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Text = "PSX Auto-Farm"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 18
+    Title.Parent = MainFrame
+
+    local UICornerTitle = Instance.new("UICorner")
+    UICornerTitle.CornerRadius = UDim.new(0, 10)
+    UICornerTitle.Parent = Title
+
+    -- Botão para ocultar/mostrar a UI (mobile)
+    local ToggleUIButton = Instance.new("TextButton")
+    ToggleUIButton.Name = "ToggleUIButton"
+    ToggleUIButton.Size = UDim2.new(0, 120, 0, 30)
+    ToggleUIButton.Position = UDim2.new(1, -130, 0, 5)
+    ToggleUIButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    ToggleUIButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleUIButton.Text = "Ocultar UI"
+    ToggleUIButton.Font = Enum.Font.GothamBold
+    ToggleUIButton.TextSize = 14
+    ToggleUIButton.Parent = Title
+
+    local UICornerToggle = Instance.new("UICorner")
+    UICornerToggle.CornerRadius = UDim.new(0, 5)
+    UICornerToggle.Parent = ToggleUIButton
+
+    -- ScrollingFrame para as opções
+    local ScrollingFrame = Instance.new("ScrollingFrame")
+    ScrollingFrame.Name = "ScrollingFrame"
+    ScrollingFrame.Size = UDim2.new(1, -10, 1, -50)
+    ScrollingFrame.Position = UDim2.new(0, 5, 0, 50)
+    ScrollingFrame.BackgroundTransparency = 1
+    ScrollingFrame.ScrollBarThickness = 5
+    ScrollingFrame.Parent = MainFrame
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.Parent = ScrollingFrame
+    UIListLayout.Padding = UDim.new(0, 5)
+
+    -- Função para criar um botão
+    local function createButton(name, callback)
+        local Button = Instance.new("TextButton")
+        Button.Name = name .. "Button"
+        Button.Size = UDim2.new(1, -10, 0, 30)
+        Button.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Button.Text = name
+        Button.Font = Enum.Font.Gotham
+        Button.TextSize = 14
+        Button.Parent = ScrollingFrame
+
+        local UICornerButton = Instance.new("UICorner")
+        UICornerButton.CornerRadius = UDim.new(0, 5)
+        UICornerButton.Parent = Button
+
+        Button.MouseButton1Click:Connect(callback)
+        return Button
+    end
+
+    -- Função para criar uma caixa de texto
+    local function createTextBox(name, defaultValue, callback)
+        local Frame = Instance.new("Frame")
+        Frame.Name = name .. "Frame"
+        Frame.Size = UDim2.new(1, -10, 0, 60)
+        Frame.BackgroundTransparency = 1
+        Frame.Parent = ScrollingFrame
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = name .. "Label"
+        Label.Size = UDim2.new(1, 0, 0, 20)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.Text = name
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local TextBox = Instance.new("TextBox")
+        TextBox.Name = name .. "TextBox"
+        TextBox.Size = UDim2.new(1, 0, 0, 30)
+        TextBox.Position = UDim2.new(0, 0, 0, 25)
+        TextBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        TextBox.Text = defaultValue
+        TextBox.Font = Enum.Font.Gotham
+        TextBox.TextSize = 14
+        TextBox.PlaceholderText = "Digite o valor"
+        TextBox.Parent = Frame
+
+        local UICornerTextBox = Instance.new("UICorner")
+        UICornerTextBox.CornerRadius = UDim.new(0, 5)
+        UICornerTextBox.Parent = TextBox
+
+        TextBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                callback(TextBox.Text)
+            end
+        end)
+
+        return TextBox
+    end
+
+    -- Função para criar um toggle
+    local function createToggle(name, defaultValue, callback)
+        local Frame = Instance.new("Frame")
+        Frame.Name = name .. "Frame"
+        Frame.Size = UDim2.new(1, -10, 0, 30)
+        Frame.BackgroundTransparency = 1
+        Frame.Parent = ScrollingFrame
+
+        local Toggle = Instance.new("TextButton")
+        Toggle.Name = name .. "Toggle"
+        Toggle.Size = UDim2.new(0, 30, 0, 30)
+        Toggle.Position = UDim2.new(1, -35, 0, 0)
+        Toggle.BackgroundColor3 = defaultValue and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+        Toggle.Text = ""
+        Toggle.Parent = Frame
+
+        local UICornerToggle = Instance.new("UICorner")
+        UICornerToggle.CornerRadius = UDim.new(0, 5)
+        UICornerToggle.Parent = Toggle
+
+        local Label = Instance.new("TextLabel")
+        Label.Name = name .. "Label"
+        Label.Size = UDim2.new(1, -40, 1, 0)
+        Label.BackgroundTransparency = 1
+        Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        Label.Text = name
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.Parent = Frame
+
+        local isToggled = defaultValue
+        Toggle.MouseButton1Click:Connect(function()
+            isToggled = not isToggled
+            Toggle.BackgroundColor3
